@@ -342,7 +342,7 @@ class MiniBUDENeuralNetwork(nn.Module):
                              )
 
     def forward(self, x):
-        x = (x-self.ipt_mean) / (self.ipt_stdev)
+        x[:, 0:6] = (x[:, 0:6]-self.ipt_mean) / (self.ipt_stdev)
         x = self.sequential(x)
         x = (x * self.opt_stdev) + self.opt_mean
         return x
