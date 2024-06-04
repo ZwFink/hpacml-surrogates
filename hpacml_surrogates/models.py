@@ -294,14 +294,14 @@ class MiniBUDENeuralNetwork(nn.Module):
     def __init__(self, params):
         super(MiniBUDENeuralNetwork, self).__init__()
         print("Params are", params)
+        num_ipt_features = params.get("input_features")
         multiplier = params.get("multiplier")
         feature_multiplier = params.get("feature_multiplier")
         num_hidden_layers = params.get("num_hidden_layers")
         h1_features = params.get("hidden_1_features")
         dropout = params.get("dropout")
 
-        n_pose_values = 6 * multiplier
-        # n_input_features = n_pose_values + 21552
+        n_pose_values = num_ipt_features * multiplier
         n_input_features = n_pose_values
         n_output_features = 1 * multiplier
 
