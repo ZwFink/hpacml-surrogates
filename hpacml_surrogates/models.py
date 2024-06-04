@@ -295,94 +295,6 @@ class MiniBUDENeuralNetwork(nn.Module):
         super(MiniBUDENeuralNetwork, self).__init__()
         print("Params are", params)
         multiplier = params.get("multiplier")
-        h1_feature_multiplier = params.get("hidden1_feature_mult")
-        h2_feature_multiplier = params.get("hidden2_feature_mult")
-        h3_feature_multiplier = params.get("hidden3_feature_mult")
-        h4_feature_multiplier = params.get("hidden4_feature_mult")
-        dropout = params.get("dropout")
-
-        n_pose_values = 6 * multiplier
-
-        # Magic number: 21552 is the number of constant values
-        # in each tensor entry based on the input deck.
-        n_input_features = n_pose_values + 21552
-        n_output_features = 1 * multiplier
-
-        h1_features = n_input_features * h1_feature_multiplier
-        h2_features = h1_features * h2_feature_multiplier
-        h3_features = h2_features * h3_feature_multiplier
-        h4_features = h3_features * h4_feature_multiplier
-
-        layers = [h1_features, h2_features, h3_features, h4_features]
-        layers = list(map(int, layers))
-
-        layers_backwards = layers[::-1]
-        while layers_backwards[-1] < n_output_features:
-            layers_backwards.pop()
-
-        layers = layers_backwards[::-1]
-        layers = list(filter(lambda x: x > 0, layers))
-        # input_layer = nn.Linear(n_input_features, layers[0])
-        input_layer = nn.Linear(n_input_features, n_input_features)
-        nn_layers = [input_layer, nn.PReLU()]
-        l0 = nn.Linear(n_input_features, layers[0])
-        nn_layers += [l0, nn.PReLU()]
-        print('Layers are ', layers)
-        for i in range(1, len(layers)):
-            nn_layers.append(nn.Linear(layers[i-1], layers[i]))
-            nn_layers.append(nn.PReLU())
-            nn_layers.append(nn.Dropout(dropout))
-        nn_layers.append(nn.Linear(layers[-1], n_output_features))
-
-        self.sequential = nn.Sequential(*nn_layers)
-
-        self.register_buffer('ipt_stdev',
-                             torch.full((1, n_input_features), torch.inf)
-                             )
-        self.register_buffer('ipt_mean',
-                             torch.full((1, n_input_features), -torch.inf)
-                             )
-        self.register_buffer('opt_stdev',
-                             torch.full((1, n_output_features), torch.inf)
-                             )
-        self.register_buffer('opt_mean',
-                             torch.full((1, n_output_features), -torch.inf)
-                             )
-
-    def forward(self, x):
-        x = (x-self.ipt_mean) / (self.ipt_stdev)
-        x = self.sequential(x)
-        x = (x * self.opt_stdev) + self.opt_mean
-        return x
-
-    def calculate_and_save_normalization_parameters(self, train_dl):
-        dataset = train_dl.dataset
-        ipt_stdev = np.std(dataset.ipt_dataset, axis=0)
-        ipt_mean = np.mean(dataset.ipt_dataset, axis=0)
-
-        opt_stdev = np.std(dataset.opt_dataset, axis=0)
-        opt_mean = np.mean(dataset.opt_dataset, axis=0)
-
-        self.ipt_stdev = torch.from_numpy(ipt_stdev).to(DATATYPE)
-        self.ipt_mean = torch.from_numpy(ipt_mean).to(DATATYPE)
-        self.opt_stdev = torch.from_numpy(opt_stdev).to(DATATYPE)
-        self.opt_mean = torch.from_numpy(opt_mean).to(DATATYPE)
-
-        self.ipt_stdev = torch.max(self.ipt_stdev,
-                                   torch.ones_like(self.ipt_stdev)
-                                   )
-        self.opt_stdev = torch.max(self.opt_stdev,
-                                   torch.ones_like(self.opt_stdev)
-                                   )
-
-        print("Input stdev shape: ", ipt_stdev.shape)
-
-
-class ConfigurableNumHiddenLayersMiniBUDENeuralNetwork(nn.Module):
-    def __init__(self, params):
-        super(ConfigurableNumHiddenLayersMiniBUDENeuralNetwork, self).__init__()
-        print("Params are", params)
-        multiplier = params.get("multiplier")
         feature_multiplier = params.get("feature_multiplier")
         num_hidden_layers = params.get("num_hidden_layers")
         h1_features = params.get("hidden_1_features")
@@ -443,10 +355,10 @@ class ConfigurableNumHiddenLayersMiniBUDENeuralNetwork(nn.Module):
         opt_stdev = np.std(dataset.opt_dataset, axis=0)
         opt_mean = np.mean(dataset.opt_dataset, axis=0)
 
-        self.ipt_stdev = torch.from_numpy(ipt_stdev).to(DATATYPE)
-        self.ipt_mean = torch.from_numpy(ipt_mean).to(DATATYPE)
-        self.opt_stdev = torch.from_numpy(opt_stdev).to(DATATYPE)
-        self.opt_mean = torch.from_numpy(opt_mean).to(DATATYPE)
+        self.ipt_stdev = torch.from_numpy(ipt_stdev)
+        self.ipt_mean = torch.from_numpy(ipt_mean)
+        self.opt_stdev = torch.from_numpy(opt_stdev)
+        self.opt_mean = torch.from_numpy(opt_mean)
 
         self.ipt_stdev = torch.max(self.ipt_stdev,
                                    torch.ones_like(self.ipt_stdev)
