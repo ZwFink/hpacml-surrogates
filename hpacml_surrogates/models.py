@@ -10,6 +10,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 class MiniWeatherNeuralNetwork(nn.Module):
     def __init__(self, network_params):
         super(MiniWeatherNeuralNetwork, self).__init__()
+        input_channels = network_params.get("input_channels")
         conv1_kernel_size = network_params.get("conv1_kernel_size")
         conv1_stride = network_params.get("conv1_stride")
         conv1_out_channels = network_params.get("conv1_out_channels")
@@ -35,7 +36,7 @@ class MiniWeatherNeuralNetwork(nn.Module):
             else:
                 bn = []
 
-            self.conv1 = nn.Conv2d(in_channels=4,
+            self.conv1 = nn.Conv2d(in_channels=input_channels,
                                    out_channels=conv1_out_channels,
                                    kernel_size=(c1ks, c1ks), stride=(c1s, c1s),
                                    padding='same',
@@ -58,7 +59,7 @@ class MiniWeatherNeuralNetwork(nn.Module):
             else:
                 bn = []
             # Here, we ignore Conv1 out channels
-            self.conv1 = nn.Conv2d(in_channels=4, out_channels=4,
+            self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=4,
                                    kernel_size=(c1ks, c1ks), stride=(c1s, c1s),
                                    padding='same'
                                    )
@@ -66,11 +67,13 @@ class MiniWeatherNeuralNetwork(nn.Module):
                                     self.activ_fn, self.dropout
                                 ])
 
-        self.register_buffer('min', torch.full((4, 1), torch.inf))
-        self.register_buffer('max', torch.full((4, 1), -torch.inf))
+        self.register_buffer('min', torch.full((1, 4, 1, 1), torch.inf))
+        self.register_buffer('max', torch.full((1, 4, 1, 1), -torch.inf))
 
     def forward(self, x):
-        x = (x - self.min) / (self.max - self.min)
+        # It doesn't matter if you normalize the first or final 4 channels,
+        # but you bizarrely should not do all 8.
+        x[:, 0:4] = (x[:, 0:4] - self.min) / (self.max - self.min)
 
         x = self.fp(x)
 
@@ -89,13 +92,12 @@ class MiniWeatherNeuralNetwork(nn.Module):
             # Compute min and max across the flattened spatial dimensions
             batch_min = x.min(dim=1, keepdim=True).values
             batch_max = x.max(dim=1, keepdim=True).values
+            batch_min = batch_min.unsqueeze(-1)
+            batch_min = batch_min.unsqueeze(0)
+            batch_max = batch_max.unsqueeze(-1)
+            batch_max = batch_max.unsqueeze(0)
             self.min = torch.min(self.min, batch_min)
             self.max = torch.max(self.max, batch_max)
-        # Adjust the min and max shapes to [C, 1, 1] by adding an extra dimension
-        self.min = self.min.unsqueeze(0)
-        self.max = self.max.unsqueeze(0)
-        self.min = self.min.unsqueeze(-1)
-        self.max = self.max.unsqueeze(-1)
         print("Min shape ", self.min.shape)
         print("Max shape ", self.max.shape)
         # print the number of non-zeros in max
