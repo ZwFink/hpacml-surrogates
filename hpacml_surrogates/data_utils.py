@@ -76,6 +76,10 @@ class HDF5DataSet(Dataset):
             return (torch.tensor(self.ipt_dataset[idx]).to(self.target_type),
                     torch.tensor(self.opt_dataset[idx]).to(self.target_type))
 
+    @property
+    def shape(self):
+        return self.ipt_dataset.shape
+
 
 class GeneratorHDF5DataSet(Dataset):
     def __init__(self, generation_command,
