@@ -5,7 +5,55 @@ import numpy as np
 import numpy as np
 import math
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
+
+class Conv2DBuilder:
+    def __init__(self, *, batchnorm = False, activation_function = False, dropout = None):
+        self.use_batchnorm = batchnorm
+        self.activation_function = activation_function
+        self.dropout = dropout
+        self.layers = list()
+
+    def set_batchnorm(self, use_batchnorm = True):
+        self.use_batchnorm = use_batchnorm
+
+    def set_activation_function(self, activation_function):
+        self.activation_function = activation_function
+
+    def set_dropout(self, dropout):
+        self.dropout = dropout
+
+    def add_conv(self, input_channels, output_channels, kernel_size, stride, padding):
+        if isinstance(kernel_size, int):
+            kernel_size = (kernel_size, kernel_size)
+        if isinstance(stride, int):
+            stride = (stride, stride)
+        if isinstance(padding, int):
+            padding = (padding, padding)
+
+        conv = nn.Conv2d(input_channels, output_channels, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.layers.append(conv)
+        
+        if self.use_batchnorm:
+            self.layers.append(nn.BatchNorm2d(output_channels))
+
+        self.layers.append(self.get_activation_layer())
+
+
+    def get_activation_layer(self):
+        if self.activation_function == "relu":
+            return nn.ReLU()
+        elif self.activation_function == "leaky_relu":
+            return nn.LeakyReLU()
+        elif self.activation_function == "tanh":
+            return nn.Tanh()
+        else:
+            return nn.ReLU()
+        
+
+    def construct(self):
+        return nn.Sequential(*self.layers)
+
 
 class MiniWeatherNeuralNetwork(nn.Module):
     def __init__(self, network_params):
@@ -18,62 +66,28 @@ class MiniWeatherNeuralNetwork(nn.Module):
         activ_fn_name = network_params.get("activation_function")
         conv2_kernel_size = network_params.get("conv2_kernel_size")
         use_batchnorm = network_params.get("batchnorm")
+        padding = network_params.get("padding")
 
-        if activ_fn_name == "relu":
-            self.activ_fn = nn.ReLU()
-        elif activ_fn_name == "leaky_relu":
-            self.activ_fn = nn.LeakyReLU()
-        elif activ_fn_name == "tanh":
-            self.activ_fn = nn.Tanh()
+        if not padding:
+            padding = 'same'
 
-        c1ks = conv1_kernel_size
-        c1s = conv1_stride
+        builder = Conv2DBuilder(activation_function=activ_fn_name, batchnorm=use_batchnorm, dropout=dropout)
+        builder.add_conv(input_channels, conv1_out_channels, conv1_kernel_size, conv1_stride, padding)
 
-        self.dropout = nn.Dropout(dropout)
-        if conv2_kernel_size != 0:
-            if use_batchnorm:
-                bn = [nn.BatchNorm2d(conv1_out_channels)]
-            else:
-                bn = []
+        if conv2_kernel_size:
+            builder.add_conv(conv1_out_channels, input_channels, conv2_kernel_size, 1, padding)
 
-            self.conv1 = nn.Conv2d(in_channels=input_channels,
-                                   out_channels=conv1_out_channels,
-                                   kernel_size=(c1ks, c1ks), stride=(c1s, c1s),
-                                   padding='same',
-                                   )
+        self.fp = builder.construct()
 
-            self.conv2 = nn.Conv2d(in_channels=conv1_out_channels,
-                                   out_channels=4,
-                                   kernel_size=(conv2_kernel_size,
-                                                conv2_kernel_size),
-                                   stride=(1, 1), padding='same'
-                                   )
-            self.fp = nn.Sequential(*[self.conv1, *bn,
-                                    self.activ_fn,
-                                    self.dropout, self.conv2, *bn,
-                                    self.activ_fn
-                                    ])
-        else:
-            if use_batchnorm:
-                bn = [nn.BatchNorm2d(4)]
-            else:
-                bn = []
-            # Here, we ignore Conv1 out channels
-            self.conv1 = nn.Conv2d(in_channels=input_channels, out_channels=4,
-                                   kernel_size=(c1ks, c1ks), stride=(c1s, c1s),
-                                   padding='same'
-                                   )
-            self.fp = nn.Sequential(*[self.conv1, *bn,
-                                    self.activ_fn, self.dropout
-                                ])
 
         self.register_buffer('min', torch.full((1, 4, 1, 1), torch.inf))
         self.register_buffer('max', torch.full((1, 4, 1, 1), -torch.inf))
+        print(self)
 
     def forward(self, x):
         # It doesn't matter if you normalize the first or final 4 channels,
         # but you bizarrely should not do all 8.
-        x[:, 0:4] = (x[:, 0:4] - self.min) / (self.max - self.min)
+        x = (x - self.min) / (self.max - self.min)
 
         x = self.fp(x)
 
