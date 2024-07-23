@@ -68,8 +68,9 @@ class MiniWeatherNeuralNetwork(nn.Module):
         use_batchnorm = network_params.get("batchnorm")
         padding = network_params.get("padding")
 
-        if not padding:
+        if padding is None:
             padding = 'same'
+
 
         builder = Conv2DBuilder(activation_function=activ_fn_name, batchnorm=use_batchnorm, dropout=dropout)
         builder.add_conv(input_channels, conv1_out_channels, conv1_kernel_size, conv1_stride, padding)
